@@ -2,7 +2,6 @@ package pool
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -29,6 +28,7 @@ func NewGenericPool(minOpen, maxOpen int, maxLifetime time.Duration, factory fac
 	if maxOpen <= 0 || minOpen > maxOpen {
 		return nil, ErrInvalidConfig
 	}
+
 	p := &GenericPool{
 		maxOpen:     maxOpen,
 		minOpen:     minOpen,
@@ -45,6 +45,7 @@ func NewGenericPool(minOpen, maxOpen int, maxLifetime time.Duration, factory fac
 		p.numOpen++
 		p.pool <- closer
 	}
+
 	return p, nil
 }
 
@@ -52,33 +53,42 @@ func (p *GenericPool) Get() (Poolable, error) {
 	if p.closed {
 		return nil, ErrPoolClosed
 	}
+
 	for {
-		fmt.Println("get...")
 		closer, err := p.getOrCreate()
 		if err != nil {
 			return nil, err
 		}
+
 		// 如果设置了超时且当前连接的活跃时间+超时时间早于现在，则当前连接已过期
 		if p.maxLifetime > 0 && closer.ActiveTime().Add(p.maxLifetime).Before(time.Now()) {
 			p.Close(closer)
 			continue
 		}
+
 		return closer, nil
 	}
 }
 
 func (p *GenericPool) getOrCreate() (Poolable, error) {
+	// 检查池中是否有对象
 	select {
 	case closer := <-p.pool:
 		return closer, nil
 	default:
 	}
+
 	p.Lock()
+
 	if p.numOpen >= p.maxOpen {
-		closer := <-p.pool
+		// 在阻塞之前释放锁
+		// 防止死锁的发生
 		p.Unlock()
+		closer := <-p.pool
+
 		return closer, nil
 	}
+
 	// 新建连接
 	closer, err := p.factory()
 	if err != nil {
@@ -87,6 +97,7 @@ func (p *GenericPool) getOrCreate() (Poolable, error) {
 	}
 	p.numOpen++
 	p.Unlock()
+
 	return closer, nil
 }
 
@@ -105,7 +116,6 @@ func (p *GenericPool) Put(closer Poolable) error {
 	case p.pool <- closer:
 	default:
 	}
-
 	// 释放锁
 	p.Unlock()
 
