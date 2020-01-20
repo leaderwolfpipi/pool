@@ -2,7 +2,6 @@ package pool
 
 import (
 	"fmt"
-	// "io"
 	"log"
 	"strconv"
 	"testing"
