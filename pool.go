@@ -81,10 +81,8 @@ func (p *GenericPool) getOrCreate() (Poolable, error) {
 	p.Lock()
 
 	if p.numOpen >= p.maxOpen {
-		// 在阻塞之前释放锁
-		// 防止死锁的发生
-		p.Unlock()
 		closer := <-p.pool
+		p.Unlock()
 
 		return closer, nil
 	}
@@ -107,8 +105,9 @@ func (p *GenericPool) Put(closer Poolable) error {
 		return ErrPoolClosed
 	}
 
+	// 无需加锁防止死锁
 	// 加锁
-	p.Lock()
+	// p.Lock()
 
 	// select-case
 	// 控制锁释放
@@ -116,8 +115,9 @@ func (p *GenericPool) Put(closer Poolable) error {
 	case p.pool <- closer:
 	default:
 	}
+
 	// 释放锁
-	p.Unlock()
+	// p.Unlock()
 
 	return nil
 }
